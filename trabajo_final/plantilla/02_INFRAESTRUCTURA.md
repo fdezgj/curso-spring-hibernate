@@ -1,10 +1,101 @@
 # Infraestructura Docker — Bloque A‌‌‌​‌​‌‌​﻿‍‍​﻿‍​​﻿​﻿​﻿‍‌‌‍​‌‌‍‌‍​﻿​‍​﻿​‍‌‍​‌​﻿‌‌‌‍​﻿​﻿‍‌​﻿​‍​﻿‌‍‌‍​﻿​﻿‌﻿‌‍​‍
 
 ## docker-compose.yml
-[Copia tu docker-compose.yml y explica CADA seccion]
+
+Levanta backend (Spring Boot) + BD (PostgreSQL) + panel web (Adminer)
+
+Los conecta entre sí automáticamente
+
+Mantiene los datos persistentes
+
+services:
+# =====================================================
+# Servicio 1: La aplicacion Spring Boot (Biblioteca)
+# =====================================================
+app:
+build: .
+ports:
+- "8080:8080"
+environment:
+- SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/${POSTGRES_DB}
+- SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+- SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+- SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+- SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+- SPRING_JPA_HIBERNATE_DDL_AUTO=update
+- SPRING_H2_CONSOLE_ENABLED=false
+depends_on:
+db:
+condition: service_healthy
+restart: on-failure
+
+# =====================================================
+# Servicio 2: Base de datos PostgreSQL
+# =====================================================
+db:
+image: postgres:16-alpine
+environment:
+- POSTGRES_DB=${POSTGRES_DB}
+- POSTGRES_USER=${POSTGRES_USER}
+- POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+ports:
+- "5432:5432"
+volumes:
+- postgres_data:/var/lib/postgresql/data
+healthcheck:
+test: ["CMD-SHELL", "pg_isready -U postgres"]
+interval: 5s
+timeout: 5s
+retries: 5
+
+# =====================================================
+# Servicio 3: Adminer (panel web para ver la BD)
+# =====================================================
+adminer:
+image: adminer
+ports:
+- "9090:8080"
+depends_on:
+db:
+condition: service_healthy
+
+# =======================================================
+# Volumenes (para que los datos persistan)
+# =======================================================
+volumes:
+postgres_data:
 
 ## Dockerfile
-[Copia tu Dockerfile y explica cada instruccion]
+
+Primera etapa: compila (Maven)
+
+Segunda etapa: ejecuta (JRE ligero)
+
+Resultado: imagen final más pequeña, limpia y eficiente
+
+# ============================================================
+# Etapa 1: Compilar con Maven (como hacer mvn package)
+# ============================================================
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# ============================================================
+# Etapa 2: Ejecutar con JRE ligero (solo lo necesario)
+# ============================================================
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+EXPOSE 8081
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ## Evidencia
 [Capturas: contenedores corriendo, API respondiendo, Adminer mostrando tablas]
+
+
+![Adminer mostrando tablas](capturas_02/Adminermostrandotablas.png)
+![APIrespondiendo](capturas_02/APIrespondiendo.png)
+![Contenedorescorriendo](capturas_02/dockercorriendo.png)
+
